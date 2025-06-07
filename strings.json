@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar ELM327 OBD-II WiFi",
+        "description": "Ingresa la información de conexión de tu adaptador ELM327",
+        "data": {
+          "host": "Dirección IP",
+          "port": "Puerto"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se puede conectar al dispositivo ELM327. Verifica la IP y puerto.",
+      "unknown": "Error inesperado. Revisa los logs para más detalles."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones ELM327 OBD-II",
+        "description": "Configura las opciones avanzadas",
+        "data": {
+          "update_interval": "Intervalo de actualización (segundos)"
+        }
+      }
+    }
+  }
+}
