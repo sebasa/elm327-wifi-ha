@@ -29,9 +29,11 @@ El componente crea los siguientes sensores automáticamente:
 ## Requisitos
 
 ### Hardware
-- Adaptador ELM327 WiFi (disponible en tiendas online por ~$10-20)
+- Adaptador ELM327 WiFi (disponible en tiendas online por ~$10-25 . tested: Vgate iCar 3 WiFi) 
 - Vehículo con puerto OBD-II (fabricados después de 1996)
 - Home Assistant instalado
+
+En mi caso tuve que modificar el chip ELM327 para dejarlo en modo STA y sin ahorro de bateria. Instrucciones aqui https://github.com/dconlon/icar_odb_wifi
 
 ## Instalación
 
