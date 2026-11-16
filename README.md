@@ -4,10 +4,12 @@ Este componente personalizado permite integrar un adaptador ELM327 WiFi con Home
 
 ## Características
 
-- ✅ **Compatibilidad Python 3**: Completamente adaptado para Python 3.8+
+- ✅ **Home Assistant moderno**: requiere Home Assistant 2025.2 o superior (Python 3.13+)
 - 🚗 **Múltiples sensores**: RPM, velocidad, temperatura, combustible, etc.
 - 📡 **Conexión WiFi**: Comunicación inalámbrica con el adaptador ELM327
-- 🔄 **Actualización automática**: Datos actualizados cada 30 segundos (configurable)
+- 🔄 **Actualización automática**: Datos actualizados cada 30 segundos (configurable desde *Opciones*)
+- 🟢 **Sensor Online**: indica cuando el vehículo está en marcha (la ECU responde)
+- 💾 **Último valor conocido**: los sensores nunca quedan en *desconocido*; con el vehículo apagado conservan el último valor (0 si nunca hubo lectura), incluso tras reiniciar Home Assistant
 - 📊 **Dashboard integrado**: Tarjetas y gráficos listos para usar
 - 📊 **Configuracion GUi**: Configuración completa desde la interfaz web con validacion de conexion exitosa
 - 🚨 **Automatizaciones**: Alertas por temperatura alta, combustible bajo, etc.
@@ -25,7 +27,15 @@ El componente crea los siguientes sensores automáticamente:
 | **Barometric Pressure** | Presión barométrica | kPa | 0133 |
 | **Ambient Temperature** | Temperatura ambiente | °C | 0146 |
 | **Battery Voltage** | Voltaje de la batería | V | 0142 |
-| **Connection Status** | Estado de conexión | - | - |
+| **Connection Status** | `connected` / `adapter_only` / `disconnected` | - | - |
+| **Online** (binary_sensor) | Encendido cuando el vehículo está en marcha | - | - |
+
+### Comportamiento con el vehículo apagado
+
+- **Online** pasa a *Desconectado* cuando el adaptador no responde o la ECU no entrega datos (contacto apagado).
+- **RPM, Velocidad y Posición del acelerador** pasan a `0` (motor apagado).
+- **Combustible, Voltaje, Temperatura y Presión** conservan el último valor leído (o `0` si nunca hubo lectura).
+- Las entidades nunca quedan *no disponibles* ni *desconocidas*.
 ## Requisitos
 
 ### Hardware
@@ -46,19 +56,22 @@ En mi caso tuve que modificar el chip ELM327 para dejarlo en modo STA y sin ahor
 
 ### Opción 2: Instalación Manual
 1. Descarga todos los archivos del componente
-2. Crea la carpeta `custom_components/elm327_obd/` en tu directorio de configuración de Home Assistant
-3. Copia todos los archivos Python a esta carpeta:
+2. Copia la carpeta `custom_components/elm327_obd/` de este repositorio a `custom_components/` en tu directorio de configuración de Home Assistant:
    ```
    custom_components/elm327_obd/
    ├── __init__.py
-   ├── manifest.json
+   ├── binary_sensor.py
    ├── config_flow.py
    ├── const.py
+   ├── coordinator.py
    ├── elm327_client.py
+   ├── entity.py
+   ├── manifest.json
    ├── sensor.py
-   └── strings.json
+   ├── strings.json
+   └── translations/
    ```
-4. Reinicia Home Assistant
+3. Reinicia Home Assistant
 
 ## Configuración
 
@@ -89,26 +102,44 @@ Los sensores estarán disponibles automáticamente. Puedes crear tarjetas como:
 type: entities
 title: "Estado del Motor"
 entities:
+  - binary_sensor.elm327_online
   - sensor.elm327_engine_rpm
-  - sensor.elm327_engine_temperature
   - sensor.elm327_vehicle_speed
   - sensor.elm327_fuel_level
 ```
 
 ### Automatizaciones de ejemplo
 
+**Aviso al arrancar el vehículo:**
+```yaml
+automation:
+  - alias: "Vehículo en marcha"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.elm327_online
+        to: "on"
+    actions:
+      - action: notify.mobile_app_tu_telefono
+        data:
+          message: "🚗 El vehículo se puso en marcha"
+```
+
 **Alerta por combustible bajo:**
 ```yaml
 automation:
   - alias: "Combustible Bajo"
-    trigger:
-      platform: numeric_state
-      entity_id: sensor.elm327_fuel_level
-      below: 15
-    action:
-      service: notify.mobile_app_tu_telefono
-      data:
-        message: "⛽ Combustible bajo: {{ states('sensor.elm327_fuel_level') }}%"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.elm327_fuel_level
+        below: 15
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.elm327_online
+        state: "on"
+    actions:
+      - action: notify.mobile_app_tu_telefono
+        data:
+          message: "⛽ Combustible bajo: {{ states('sensor.elm327_fuel_level') }}%"
 ```
 
 ## Solución de Problemas
@@ -145,28 +176,12 @@ automation:
 
 ### Agregar nuevos sensores
 
-Para agregar nuevos comandos OBD-II, modificar en `__init__.py`:
-
-```python
-commands = {
-    "tu_sensor": "01XX",  # Comando OBD-II en hexadecimal
-    # ...
-}
-```
-
-Y agregar la configuración en `sensor.py`:
-
-```python
-SENSOR_TYPES = {
-    "tu_sensor": {
-        "name": "Tu Sensor",
-        "icon": "mdi:icon-name",
-        "unit": "unidad",
-        # ...
-    },
-    # ...
-}
-```
+1. Agregar el PID en `OBD_COMMANDS` en [`const.py`](custom_components/elm327_obd/const.py):
+   ```python
+   "tu_sensor": "01XX",
+   ```
+2. Agregar la fórmula de conversión en `Elm327Client._decode` ([`elm327_client.py`](custom_components/elm327_obd/elm327_client.py)).
+3. Agregar un `Elm327SensorEntityDescription` en `SENSORS` ([`sensor.py`](custom_components/elm327_obd/sensor.py)) y su nombre en `strings.json` / `translations/*.json`.
 
 ## Contribución
 

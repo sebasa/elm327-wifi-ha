@@ -1,0 +1,69 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure ELM327 OBD-II WiFi",
+        "description": "Enter the connection details of your ELM327 adapter",
+        "data": {
+          "host": "IP address",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the ELM327 device. Check the IP and port.",
+      "unknown": "Unexpected error. Check the logs for details."
+    },
+    "abort": {
+      "already_configured": "This adapter is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ELM327 OBD-II options",
+        "data": {
+          "update_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      }
+    },
+    "sensor": {
+      "engine_rpm": {
+        "name": "Engine RPM"
+      },
+      "vehicle_speed": {
+        "name": "Vehicle speed"
+      },
+      "throttle_position": {
+        "name": "Throttle position"
+      },
+      "fuel_level": {
+        "name": "Fuel level"
+      },
+      "barometric_pressure": {
+        "name": "Barometric pressure"
+      },
+      "ambient_temperature": {
+        "name": "Ambient temperature"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "connection_state": {
+        "name": "Connection status",
+        "state": {
+          "connected": "Connected (vehicle running)",
+          "adapter_only": "Adapter only (ECU not responding)",
+          "disconnected": "Disconnected"
+        }
+      }
+    }
+  }
+}

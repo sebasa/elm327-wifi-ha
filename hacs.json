@@ -1,0 +1,5 @@
+{
+  "name": "ELM327 OBD-II WiFi",
+  "homeassistant": "2025.2.0",
+  "render_readme": true
+}
