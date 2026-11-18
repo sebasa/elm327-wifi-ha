@@ -4,7 +4,7 @@ Este componente personalizado permite integrar un adaptador ELM327 WiFi con Home
 
 ## Características
 
-- ✅ **Home Assistant moderno**: requiere Home Assistant 2025.2 o superior (Python 3.13+)
+- ✅ **Home Assistant moderno**: requiere Home Assistant 2025.8 o superior (Python 3.13+)
 - 🚗 **Múltiples sensores**: RPM, velocidad, temperatura, combustible, etc.
 - 📡 **Conexión WiFi**: Comunicación inalámbrica con el adaptador ELM327
 - 🔄 **Actualización automática**: Datos actualizados cada 30 segundos (configurable desde *Opciones*)
@@ -26,7 +26,7 @@ El componente crea los siguientes sensores automáticamente:
 | **Fuel Level** | Nivel de combustible | % | 012F |
 | **Barometric Pressure** | Presión barométrica | kPa | 0133 |
 | **Ambient Temperature** | Temperatura ambiente | °C | 0146 |
-| **Battery Voltage** | Voltaje de la batería | V | 0142 |
+| **Battery Voltage** | Voltaje de la batería (medido por el adaptador, funciona con el vehículo apagado) | V | ATRV (respaldo: 0142) |
 | **Connection Status** | `connected` / `adapter_only` / `disconnected` | - | - |
 | **Online** (binary_sensor) | Encendido cuando el vehículo está en marcha | - | - |
 
@@ -34,7 +34,8 @@ El componente crea los siguientes sensores automáticamente:
 
 - **Online** pasa a *Desconectado* cuando el adaptador no responde o la ECU no entrega datos (contacto apagado).
 - **RPM, Velocidad y Posición del acelerador** pasan a `0` (motor apagado).
-- **Combustible, Voltaje, Temperatura y Presión** conservan el último valor leído (o `0` si nunca hubo lectura).
+- **Voltaje de batería** se sigue leyendo mientras el adaptador responda (usa `ATRV`, que mide el pin 16 del conector OBD).
+- **Combustible, Temperatura y Presión** conservan el último valor leído (o `0` si nunca hubo lectura).
 - Las entidades nunca quedan *no disponibles* ni *desconocidas*.
 ## Requisitos
 
@@ -66,6 +67,7 @@ En mi caso tuve que modificar el chip ELM327 para dejarlo en modo STA y sin ahor
    ├── coordinator.py
    ├── elm327_client.py
    ├── entity.py
+   ├── icons.json
    ├── manifest.json
    ├── sensor.py
    ├── strings.json

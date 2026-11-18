@@ -23,8 +23,12 @@ OBD_COMMANDS: Final[dict[str, str]] = {
     "fuel_level": "012F",
     "barometric_pressure": "0133",
     "ambient_temperature": "0146",
-    "battery_voltage": "0142",
 }
+
+# Voltaje de batería: se lee con ATRV (directo del adaptador, funciona con el
+# vehículo apagado). El PID 0142 queda como respaldo si ATRV no está soportado.
+KEY_BATTERY_VOLTAGE: Final = "battery_voltage"
+BATTERY_VOLTAGE_PID: Final = "0142"
 
 # Claves especiales en los datos del coordinador
 KEY_CONNECTION_STATE: Final = "connection_state"

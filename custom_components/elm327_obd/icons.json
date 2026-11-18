@@ -1,0 +1,33 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "online": {
+        "default": "mdi:car-off",
+        "state": {
+          "on": "mdi:car"
+        }
+      }
+    },
+    "sensor": {
+      "engine_rpm": {
+        "default": "mdi:engine"
+      },
+      "throttle_position": {
+        "default": "mdi:gas-cylinder"
+      },
+      "fuel_level": {
+        "default": "mdi:fuel"
+      },
+      "battery_voltage": {
+        "default": "mdi:car-battery"
+      },
+      "connection_state": {
+        "default": "mdi:car-connected",
+        "state": {
+          "adapter_only": "mdi:car-wireless",
+          "disconnected": "mdi:car-off"
+        }
+      }
+    }
+  }
+}

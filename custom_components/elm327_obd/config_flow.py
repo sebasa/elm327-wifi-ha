@@ -8,7 +8,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 
@@ -89,8 +89,8 @@ class Elm327ConfigFlow(ConfigFlow, domain=DOMAIN):
         return Elm327OptionsFlow()
 
 
-class Elm327OptionsFlow(OptionsFlow):
-    """Opciones de ELM327 OBD-II."""
+class Elm327OptionsFlow(OptionsFlowWithReload):
+    """Opciones de ELM327 OBD-II (recarga la integración al guardar)."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

@@ -43,7 +43,6 @@ SENSORS: tuple[Elm327SensorEntityDescription, ...] = (
     Elm327SensorEntityDescription(
         key="engine_rpm",
         translation_key="engine_rpm",
-        icon="mdi:engine",
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
@@ -61,7 +60,6 @@ SENSORS: tuple[Elm327SensorEntityDescription, ...] = (
     Elm327SensorEntityDescription(
         key="throttle_position",
         translation_key="throttle_position",
-        icon="mdi:gas-cylinder",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
@@ -70,7 +68,6 @@ SENSORS: tuple[Elm327SensorEntityDescription, ...] = (
     Elm327SensorEntityDescription(
         key="fuel_level",
         translation_key="fuel_level",
-        icon="mdi:fuel",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
@@ -163,7 +160,6 @@ class Elm327ConnectionSensor(Elm327Entity, SensorEntity):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = CONNECTION_STATES
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_icon = "mdi:car-connected"
 
     def __init__(self, coordinator: Elm327DataUpdateCoordinator) -> None:
         """Inicializar sensor de conexión."""

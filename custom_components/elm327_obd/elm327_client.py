@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from .const import (
+    BATTERY_VOLTAGE_PID,
+    KEY_BATTERY_VOLTAGE,
     KEY_CONNECTION_STATE,
     KEY_ONLINE,
     OBD_COMMANDS,
@@ -27,6 +30,15 @@ _NO_DATA_MARKERS = (
     "?",
 )
 
+# Respuestas que indican que no hay ninguna ECU en el bus (contacto apagado):
+# no tiene sentido seguir consultando el resto de los PIDs en este ciclo.
+_ECU_OFF_MARKERS = (
+    "UNABLE TO CONNECT",
+    "BUS INIT",
+    "BUS ERROR",
+    "CAN ERROR",
+)
+
 _INIT_COMMANDS = (
     ("ATZ", "Reset"),
     ("ATE0", "Echo off"),
@@ -35,6 +47,12 @@ _INIT_COMMANDS = (
     ("ATH0", "Headers off"),
     ("ATSP0", "Protocolo automático"),
 )
+
+# La búsqueda automática de protocolo ("SEARCHING...") puede tardar bastante
+# más que un comando normal, sobre todo con el contacto apagado.
+_PID_TIMEOUT = 15.0
+
+_VOLTAGE_RE = re.compile(r"(\d{1,2}(?:[.,]\d+)?)\s*V")
 
 
 class Elm327Error(Exception):
@@ -68,7 +86,9 @@ class Elm327Client:
             )
         except (OSError, TimeoutError) as err:
             await self.async_disconnect()
-            raise Elm327Error(f"No se pudo conectar a {self.host}:{self.port}: {err}") from err
+            raise Elm327Error(
+                f"No se pudo conectar a {self.host}:{self.port}: {err}"
+            ) from err
         self._initialized = False
         _LOGGER.debug("Conectado a ELM327 en %s:%s", self.host, self.port)
 
@@ -96,9 +116,15 @@ class Elm327Client:
             raw = await asyncio.wait_for(
                 self._reader.readuntil(b">"), timeout or self.timeout
             )
-        except (OSError, TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError) as err:
+        except (
+            OSError,
+            TimeoutError,
+            asyncio.IncompleteReadError,
+            asyncio.LimitOverrunError,
+        ) as err:
+            # El buffer puede haber quedado con datos a medias: empezar de cero.
             await self.async_disconnect()
-            raise Elm327Error(f"Error enviando {command}: {err}") from err
+            raise Elm327Error(f"Error enviando {command}: {err!r}") from err
         return raw.decode(errors="ignore").replace(">", "").strip()
 
     async def _async_initialize(self) -> None:
@@ -112,6 +138,25 @@ class Elm327Client:
             await asyncio.sleep(0.2)
         self._initialized = True
 
+    async def _async_ensure_ready(self) -> None:
+        """Conectar e inicializar, reintentando una vez.
+
+        Los adaptadores WiFi suelen cerrar sockets inactivos: el primer
+        comando tras una pausa larga puede fallar aunque el adaptador esté bien.
+        """
+        try:
+            await self._async_initialize()
+        except Elm327Error as err:
+            _LOGGER.debug("Reintentando conexión con ELM327: %s", err)
+            await self._async_initialize()
+
+    @staticmethod
+    def _parse_voltage(response: str) -> float | None:
+        """Interpretar la respuesta de ATRV (p. ej. '12.6V')."""
+        if match := _VOLTAGE_RE.search(response.upper()):
+            return float(match.group(1).replace(",", "."))
+        return None
+
     @staticmethod
     def _extract_data(command: str, response: str) -> bytes | None:
         """Obtener los bytes de datos de una respuesta modo 01."""
@@ -124,7 +169,7 @@ class Elm327Client:
             idx = line.find(expected)
             if idx == -1:
                 continue
-            payload = line[idx + len(expected):]
+            payload = line[idx + len(expected) :]
             try:
                 return bytes.fromhex(payload[: len(payload) // 2 * 2])
             except ValueError:
@@ -148,29 +193,58 @@ class Elm327Client:
             return (data[0] * 256 + data[1]) / 1000
         return None
 
+    async def _async_read_pid(self, command: str) -> tuple[float | None, str]:
+        """Leer un PID. Devuelve (valor, respuesta cruda)."""
+        response = await self._async_send(command, timeout=_PID_TIMEOUT)
+        raw = self._extract_data(command, response)
+        value = self._decode(command, raw) if raw is not None else None
+        return value, response
+
     async def async_get_all_data(self) -> dict[str, Any]:
-        """Leer todos los PIDs.
+        """Leer el voltaje de batería y todos los PIDs.
 
         Nunca lanza excepción: devuelve el estado de conexión y los valores
         que se pudieron leer (None para los que no respondieron).
         """
         data: dict[str, Any] = dict.fromkeys(OBD_COMMANDS)
+        data[KEY_BATTERY_VOLTAGE] = None
+        adapter_ok = False
+
         async with self._lock:
             try:
-                await self._async_initialize()
+                await self._async_ensure_ready()
+
+                # ATRV mide la batería en el pin 16 del conector OBD: responde
+                # aunque el motor y el contacto estén apagados.
+                response = await self._async_send("ATRV")
+                data[KEY_BATTERY_VOLTAGE] = self._parse_voltage(response)
+                adapter_ok = True
+                _LOGGER.debug("ATRV: %s -> %s", response, data[KEY_BATTERY_VOLTAGE])
+
                 for key, command in OBD_COMMANDS.items():
-                    response = await self._async_send(command)
-                    raw = self._extract_data(command, response)
-                    data[key] = self._decode(command, raw) if raw is not None else None
+                    data[key], response = await self._async_read_pid(command)
                     _LOGGER.debug("%s (%s): %s -> %s", key, command, response, data[key])
+                    if any(marker in response.upper() for marker in _ECU_OFF_MARKERS):
+                        _LOGGER.debug("La ECU no responde; se omiten el resto de PIDs")
+                        break
                     await asyncio.sleep(0.05)
+
+                # Respaldo: si el adaptador no soporta ATRV, usar el PID 0142.
+                if data[KEY_BATTERY_VOLTAGE] is None and any(
+                    data[key] is not None for key in OBD_COMMANDS
+                ):
+                    data[KEY_BATTERY_VOLTAGE], _ = await self._async_read_pid(
+                        BATTERY_VOLTAGE_PID
+                    )
             except Elm327Error as err:
-                _LOGGER.debug("ELM327 no disponible: %s", err)
-                data[KEY_CONNECTION_STATE] = STATE_DISCONNECTED
-                data[KEY_ONLINE] = False
-                return data
+                _LOGGER.debug("Error de comunicación con ELM327: %s", err)
 
         online = any(data[key] is not None for key in OBD_COMMANDS)
         data[KEY_ONLINE] = online
-        data[KEY_CONNECTION_STATE] = STATE_CONNECTED if online else STATE_ADAPTER_ONLY
+        if online:
+            data[KEY_CONNECTION_STATE] = STATE_CONNECTED
+        elif adapter_ok:
+            data[KEY_CONNECTION_STATE] = STATE_ADAPTER_ONLY
+        else:
+            data[KEY_CONNECTION_STATE] = STATE_DISCONNECTED
         return data
